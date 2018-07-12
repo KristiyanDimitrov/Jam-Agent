@@ -1,0 +1,272 @@
+GOALS:
+	ACHIEVE find_water_rock;
+
+FACTS:
+
+	//robot facts
+	FACT robot_position -1 0; //set initial robot position
+	FACT inventory 0; //robot's inventory
+	
+	//rock positions
+	FACT rock "A" 2 6 "False"; //rock (No watter)
+	FACT rock "B" 3 2 "False"; //rock (No watter)
+	FACT rock "C" 5 3 "False"; //rock (No watter)
+	FACT rock "D" 6 1 "False"; //rock (No watter)
+	FACT rock "W" 7 5 "True";  //rock contains water
+	
+	//other facts
+	FACT water_found "False";
+		
+	
+	
+PLAN: { 
+
+NAME:
+	"Move robot"
+
+DOCUMENTATION:
+        "This is the plan that traverses all the locations and calls the check_for_rock plan to it's part."
+
+GOAL:
+	ACHIEVE find_water_rock;
+
+BODY:
+	
+	RETRIEVE robot_position $x $y;
+	RETRIEVE water_found $w;
+	
+	// Increase x until it get the end of the grid ( 7-0 )
+	WHILE: TEST( && (< $x 7) (!= $w "True"))
+	{
+	    RETRIEVE water_found $w;
+		ASSIGN $x (+ $x 1);
+		UPDATE (robot_position) (robot_position $x $y);
+		EXECUTE println "Position: " $x " " $y;
+		PERFORM check_for_rock;
+		WHEN: TEST (== $x 7)
+		{   // Increase y++ in order to start the next collumn ( 7-1 )
+				
+			TEST (< $y 6);
+			TEST (!= $W "True");
+			ASSIGN $y (+ $y 1);
+			UPDATE (robot_position) (robot_position $x $y);
+			EXECUTE println "Position: " $x " " $y;
+			PERFORM check_for_rock;
+			
+			// Decrease x until it get the end of the grid ( 0-1 )
+			WHILE: TEST (&& (> $x 0) (!= $w "True"))
+	        {	
+				ASSIGN $x (- $x 1);
+				UPDATE (robot_position) (robot_position $x $y);
+				EXECUTE println "Position: " $x " " $y;
+				PERFORM check_for_rock;
+				RETRIEVE water_found $w;
+			};
+
+			// Increase y++ in order to start the next collumn ( 0-2 ) and repeats the patters from the start.
+			WHEN: TEST (!= $W "True")
+			{	
+			ASSIGN $y (+ $y 1);
+			UPDATE (robot_position) (robot_position $x $y);
+			EXECUTE println "Position: " $x " " $y;
+			PERFORM check_for_rock;
+			};
+			
+		};
+		
+	};
+	WHEN: TEST (!= $w "True")
+	{
+	EXECUTE println " Nothing helpfull found!";
+	};
+	EXECUTE println " Search is done";
+	EXECUTE println " Water Found: " $w;
+	ACHIEVE return_to_base;
+}
+
+
+PLAN: { 
+
+NAME:
+	"Check for rock"
+
+DOCUMENTATION:
+        "This plan finds out if there are any rocks in the robots current possition and calls the pickup_rock plan to do its part."
+
+GOAL:
+	PERFORM check_for_rock;
+
+BODY:
+	    RETRIEVEALL $d rock $rockName $x $y;
+		RETRIEVE robot_position $robotX $robotY;
+		
+		// Compairs the array of rocks to the robots possition
+		ASSIGN $c 0;
+		WHILE : TEST (< $c 5)
+	   {
+			NEXTFACT $d rock $rockName  $x $y;
+		    ASSIGN $c (+ $c 1);
+			WHEN: TEST (== $x $robotX)
+			{
+				WHEN: TEST (== $y $robotY)
+				{
+					EXECUTE println " ROCK FOUND:" $x" "$y;
+					PERFORM pickup_rock;
+				};
+		    };
+       };
+	
+    FAILURE:
+        EXECUTE println " Check_for_rock failed";
+    
+}
+
+
+PLAN: { 
+
+NAME:
+	"pick up rock"
+
+DOCUMENTATION:
+        "Picks the rock up in order to check it for watter."
+
+GOAL:
+	PERFORM pickup_rock;
+
+BODY:
+	
+	EXECUTE println " ROCK PICKED!";
+	PERFORM check_for_water;
+
+}
+
+
+
+PLAN: { 
+
+NAME:
+	"Check for water presence"
+
+DOCUMENTATION:
+        "Checks if the picked up rock has any water in it."
+
+GOAL:
+	PERFORM check_for_water;
+
+BODY:
+		EXECUTE println " Cheking for water!";
+		RETRIEVEALL $d rock $rockName $x $y $water;
+		RETRIEVE robot_position $robotX $robotY;
+
+		// Check if the picked up rock has watter
+		ASSIGN $c 0;
+		WHILE : TEST (< $c 5)
+	   {
+			NEXTFACT $d rock $rockName  $x $y $water;
+		    ASSIGN $c (+ $c 1);
+
+			WHEN: TEST (== $x $robotX)
+			{
+				WHEN: TEST (&& (== $y $robotY) (== $water "True"))
+				{
+					EXECUTE println " Water found!";
+					ACHIEVE store_rock;
+		            ACHIEVE return_to_base;
+					
+				};
+			};
+				
+	   };   
+	FAILURE:
+        EXECUTE println "Check_for_water failed";
+}
+
+
+
+PLAN: { 
+
+NAME:
+	"Store water rock"
+
+DOCUMENTATION:
+        "If the current rock contains watter the robot stores it, thus deleting the previous location of the rock and increasing its inventory.
+		If the rock doesn't have watter it calls the drop_rock plan."
+
+GOAL:
+	ACHIEVE store_rock;
+
+BODY:
+	RETRIEVE robot_position $x $y;
+	RETRIEVE inventory $i;
+	RETRIEVE water_found $water;
+
+	// Update fact for watter
+	ASSIGN $water "True";
+	UPDATE (water_found) (water_found $water);
+
+	// Update fact for inventory
+	ASSIGN $i (+ $i 1);
+	UPDATE (inventory) (inventory $i);
+
+	EXECUTE println " Rock stored!";
+	RETRACT rock $x $y;
+	EXECUTE println " Inventory: Rock from [" $x "-" $y"]";
+
+
+	FAILURE:
+        EXECUTE println " Check_for_water failed";
+	
+}
+
+
+PLAN: { 
+
+NAME:
+	"In case the rock does not have water, the robot drops it."
+
+DOCUMENTATION:
+        "This is a nonsensical plan that shows all of the possible actions"
+
+GOAL:
+	ACHIEVE drop_rock;
+
+BODY:
+	EXECUTE println "Drop rock!";
+
+	FAILURE:
+        EXECUTE println " Check_for_water failed";
+}
+
+
+PLAN: { 
+
+NAME:
+	"Return to base"
+
+DOCUMENTATION:
+        "This plan is for the robot to get back to base in case it finds a rock with watter or if it reaches the end of the given map."
+
+GOAL:
+	ACHIEVE return_to_base;
+
+BODY:
+
+	RETRIEVE robot_position $x $y;
+	
+	WHILE: TEST(> $x 0)
+	{
+		ASSIGN $x (- $x 1);
+		UPDATE (robot_position) (robot_position $x $y);
+		EXECUTE println "Heading back to base! Location: " $x " " $y;
+	};
+	
+	WHILE: TEST(> $y 0)
+	{
+		ASSIGN $y (- $y 1);
+		UPDATE (robot_position) (robot_position $x $y);
+		EXECUTE println "Heading back to base! Location: " $x " " $y;
+	};
+	EXECUTE println "BACK TO BASE! Location: " $x " " $y;
+	FAILURE:
+        EXECUTE println "check_for_water failed";
+}
